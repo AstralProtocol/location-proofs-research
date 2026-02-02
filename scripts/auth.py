@@ -3,6 +3,7 @@ WitnessChain API Authentication
 
 Handles pre-login and login flow to get session cookie.
 """
+from __future__ import annotations
 
 import os
 import requests
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_URL = os.getenv("API_URL", "https://api.witnesschain.com/proof/v1")
+API_URL = os.getenv("API_URL", "https://mainnet.witnesschain.com/proof/v1")
 PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 PROOF_TYPE = "pol"  # Proof of Location
 
@@ -26,102 +27,77 @@ def get_wallet():
     return Account.from_key(PRIVATE_KEY)
 
 
-def pre_login(wallet_address: str) -> dict:
+def authenticate() -> tuple[Account, requests.Session]:
     """
-    Call pre-login to get message to sign.
+    Full authentication flow using a session to persist cookies.
 
-    Returns the full response for inspection.
-    """
-    url = f"{API_URL}/{PROOF_TYPE}/pre-login"
-
-    payload = {
-        "walletAddress": wallet_address,
-        "role": "payer",  # We're paying for challenges
-        "keyType": "ethereum"
-    }
-
-    print(f"[pre-login] POST {url}")
-    print(f"[pre-login] Payload: {payload}")
-
-    response = requests.post(url, json=payload, timeout=TIMEOUT)
-
-    print(f"[pre-login] Status: {response.status_code}")
-    print(f"[pre-login] Response: {response.text[:500]}")
-
-    response.raise_for_status()
-    return response.json()
-
-
-def login(wallet: Account, message: str) -> tuple[dict, str]:
-    """
-    Sign message and complete login.
-
-    Returns (response_json, session_cookie).
-    """
-    url = f"{API_URL}/{PROOF_TYPE}/login"
-
-    # Sign the message
-    message_encoded = encode_defunct(text=message)
-    signed = wallet.sign_message(message_encoded)
-
-    payload = {
-        "walletAddress": wallet.address,
-        "message": message,
-        "signature": signed.signature.hex(),
-        "role": "payer",
-        "keyType": "ethereum"
-    }
-
-    print(f"[login] POST {url}")
-    print(f"[login] Wallet: {wallet.address}")
-
-    response = requests.post(url, json=payload, timeout=TIMEOUT)
-
-    print(f"[login] Status: {response.status_code}")
-    print(f"[login] Response: {response.text[:500]}")
-
-    response.raise_for_status()
-
-    # Extract session cookie
-    cookies = response.cookies.get_dict()
-    cookie_header = "; ".join([f"{k}={v}" for k, v in cookies.items()])
-
-    print(f"[login] Cookies: {list(cookies.keys())}")
-
-    return response.json(), cookie_header
-
-
-def authenticate() -> tuple[Account, str]:
-    """
-    Full authentication flow.
-
-    Returns (wallet, session_cookie).
+    Returns (wallet, authenticated_session).
     """
     wallet = get_wallet()
     print(f"\n=== Authenticating as {wallet.address} ===\n")
 
-    # Pre-login
-    pre_login_response = pre_login(wallet.address)
-    message = pre_login_response.get("result", {}).get("message")
+    # Create session to persist cookies
+    session = requests.Session()
 
-    if not message:
-        # Try alternate response structure
-        message = pre_login_response.get("message")
+    # Step 1: Pre-login
+    url = f"{API_URL}/{PROOF_TYPE}/pre-login"
+    payload = {
+        "publicKey": wallet.address,
+        "proof_type": PROOF_TYPE,
+        "walletPublicKey": {
+            "ethereum": wallet.address
+        },
+        "keyType": "ethereum",
+        "role": "payer",
+        "projectName": "WITNESS_CHAIN",
+        "claims": {
+            "bandwidth": 10
+        }
+    }
 
+    print(f"[pre-login] POST {url}")
+    response = session.post(url, json=payload, timeout=TIMEOUT)
+
+    print(f"[pre-login] Status: {response.status_code}")
+    print(f"[pre-login] Response: {response.text[:500]}")
+    print(f"[pre-login] Cookies: {session.cookies.get_dict()}")
+
+    response.raise_for_status()
+    pre_login_data = response.json()
+
+    message = pre_login_data.get("result", {}).get("message")
     if not message:
-        raise ValueError(f"No message in pre-login response: {pre_login_response}")
+        message = pre_login_data.get("message")
+    if not message:
+        raise ValueError(f"No message in pre-login response: {pre_login_data}")
 
     print(f"[auth] Message to sign: {message[:100]}...")
 
-    # Login
-    login_response, cookie = login(wallet, message)
+    # Step 2: Sign the message
+    message_encoded = encode_defunct(text=message)
+    signed = wallet.sign_message(message_encoded)
+
+    # Step 3: Login (session automatically includes cookies from pre-login)
+    url = f"{API_URL}/{PROOF_TYPE}/login"
+    payload = {
+        "signature": "0x" + signed.signature.hex()
+    }
+
+    print(f"[login] POST {url}")
+    response = session.post(url, json=payload, timeout=TIMEOUT)
+
+    print(f"[login] Status: {response.status_code}")
+    print(f"[login] Response: {response.text[:500]}")
+    print(f"[login] Cookies: {session.cookies.get_dict()}")
+
+    response.raise_for_status()
 
     print(f"\n=== Authentication successful ===\n")
 
-    return wallet, cookie
+    return wallet, session
 
 
 if __name__ == "__main__":
-    wallet, cookie = authenticate()
+    wallet, session = authenticate()
     print(f"Wallet: {wallet.address}")
-    print(f"Cookie: {cookie[:50]}...")
+    print(f"Session cookies: {session.cookies.get_dict()}")

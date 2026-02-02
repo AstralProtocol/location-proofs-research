@@ -1,87 +1,60 @@
-# WitnessChain Integration Test
+# Location Proofs Research
 
-Testing WitnessChain Proof of Location (PoL) to understand proof format for Astral verification.
+Research and API exploration for location proof systems, starting with WitnessChain Proof of Location.
 
-## Goal
+Part of the [Astral Protocol](https://github.com/AstralProtocol) ecosystem.
 
-Capture actual WitnessChain proof data to understand:
-- Proof data structure
-- Watchtower signatures (if included)
-- What can be verified independently
+## Overview
+
+This repo documents our exploration of existing location proof systems to understand:
+- Proof data structures and cryptographic signatures
+- What can be verified independently (without calling their API)
+- Integration patterns for Astral Location Services
+
+## WitnessChain Findings
+
+See **[FINDINGS.md](./FINDINGS.md)** for detailed technical findings.
+
+**Summary:**
+- Authentication works via wallet signature
+- Proofs contain ECDSA signatures from watchtowers
+- Cross-references multiple IP geolocation services
+- Triggering new challenges requires POINTS tokens (blocked)
+- Historical proof data available via `/all-provers` endpoint
 
 ## Setup
 
 ```bash
-cd /Users/x25bd/Code/astral/witnesschain-test
-
-# Create virtual env
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Create .env from example
 cp .env.example .env
+# Add a private key (no funds needed, just for auth)
 ```
 
-## Generate a Test Wallet
-
-You need a private key for API auth (no funds needed):
-
+Generate a test wallet:
 ```bash
-# Quick way using Python
-python3 -c "from eth_account import Account; a = Account.create(); print(f'Address: {a.address}\nPrivate Key: {a.key.hex()}')"
+python3 -c "from eth_account import Account; a = Account.create(); print(f'PRIVATE_KEY={a.key.hex()}')"
 ```
 
-Add the private key to `.env`:
-```
-PRIVATE_KEY=0x...
-```
+## Scripts
 
-## Usage
+| Script | Purpose |
+|--------|---------|
+| `auth.py` | Authentication module (pre-login + signature) |
+| `explore_api.py` | General API endpoint exploration |
+| `analyze_proofs.py` | Extract and analyze proof structure |
+| `find_online_prover.py` | Find provers with recent activity |
+| `trigger_challenge.py` | Attempt to trigger a challenge (requires POINTS) |
 
-### 1. Explore the API
+## Data
 
-Start by exploring available endpoints:
+Sample proof data saved in `proofs/`:
+- `proof_structure.json` - Example challenge result with signature
+- `challengers.json` - Watchtower network data
 
-```bash
-python scripts/explore_api.py
-```
+## Related
 
-This calls various endpoints and saves responses to `proofs/`.
-
-### 2. List Available Provers
-
-```bash
-python scripts/list_provers.py
-```
-
-Find an active prover to challenge.
-
-### 3. Trigger a Challenge
-
-```bash
-# Basic challenge
-python scripts/trigger_challenge.py --prover <PROVER_ADDRESS>
-
-# With polling for result
-python scripts/trigger_challenge.py --prover <PROVER_ADDRESS> --poll
-```
-
-## Output
-
-All responses saved to `proofs/` directory as JSON.
-
-## Notes
-
-- The challenge-request-dcl endpoint may require an onchain `submitRequest` first
-- If so, we'll need to interact with their L2 contract
-- See: https://docs.witnesschain.com/infinity-watch/apis/challenge-apis/getting-started
-
-## What We're Looking For
-
-1. **Proof structure**: What data is returned after a completed challenge?
-2. **Signatures**: Are watchtower signatures included? In what format?
-3. **Verification**: Can we verify proofs without calling their API?
-4. **Onchain data**: What gets recorded onchain vs returned via API?
+- [Astral Location Services](https://github.com/AstralProtocol/astral-location-services)
+- [WitnessChain Docs](https://docs.witnesschain.com)

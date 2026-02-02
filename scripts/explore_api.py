@@ -14,21 +14,15 @@ from auth import authenticate, API_URL, PROOF_TYPE, TIMEOUT
 load_dotenv()
 
 
-def call_endpoint(cookie: str, endpoint: str, payload: dict = None) -> dict:
-    """Call an API endpoint and return full response details."""
+def call_endpoint(session: requests.Session, endpoint: str, payload: dict = None) -> dict:
+    """Call an API endpoint using authenticated session."""
     url = f"{API_URL}/{PROOF_TYPE}/{endpoint}"
-
-    headers = {
-        "Cookie": cookie,
-        "Content-Type": "application/json"
-    }
 
     print(f"\n[{endpoint}] POST {url}")
 
     try:
-        response = requests.post(
+        response = session.post(
             url,
-            headers=headers,
             json=payload or {},
             timeout=TIMEOUT
         )
@@ -53,8 +47,8 @@ def call_endpoint(cookie: str, endpoint: str, payload: dict = None) -> dict:
 
 
 def main():
-    # Authenticate
-    wallet, cookie = authenticate()
+    # Authenticate (returns session with cookies)
+    wallet, session = authenticate()
 
     print(f"\n{'='*60}")
     print("EXPLORING WITNESSCHAIN API")
@@ -82,7 +76,7 @@ def main():
 
     for endpoint, payload in endpoints:
         print(f"\n--- Testing: {endpoint} ---")
-        result = call_endpoint(cookie, endpoint, payload)
+        result = call_endpoint(session, endpoint, payload)
         results["endpoints"][endpoint] = result
 
         if result["success"]:
