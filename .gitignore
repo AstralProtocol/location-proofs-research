@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+proofs/*
+!proofs/.gitkeep
+.venv/
+venv/
